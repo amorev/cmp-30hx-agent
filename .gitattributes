@@ -1,0 +1,14 @@
+# Все текстовые файлы — LF. Иначе на Linux shell-скрипты и юниты systemd
+# падают с "syntax error near unexpected token $'\r'" (проверено: архив с CRLF
+# не разворачивается).
+* text=auto eol=lf
+
+*.sh       text eol=lf
+*.service  text eol=lf
+*.py       text eol=lf
+*.md       text eol=lf
+*.cpp      text eol=lf
+*.h        text eol=lf
+*.html     text eol=lf
+*.example  text eol=lf
+.gitignore text eol=lf
