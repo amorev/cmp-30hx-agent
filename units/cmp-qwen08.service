@@ -1,0 +1,26 @@
+[Unit]
+Description=CMP Voice — Qwen3.5-0.8B dev server (llama-server, OpenAI API + Bearer)
+Documentation=file:///home/ubuntu/cmp-voice/README.md
+After=network.target
+
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/cmp-voice
+EnvironmentFile=-/etc/cmp-voice.env
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=LD_LIBRARY_PATH=/home/ubuntu/cmp-voice/src/llama-prism/build/bin
+ExecStart=/home/ubuntu/cmp-voice/scripts/run_qwen08.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+MemoryHigh=4G
+MemoryMax=6G
+StandardOutput=journal
+StandardError=journal
+
+
+[Install]
+WantedBy=multi-user.target

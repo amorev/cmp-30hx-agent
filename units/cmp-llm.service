@@ -1,0 +1,39 @@
+[Unit]
+Description=CMP Voice — LLM daemon (Bonsai-2 9B PQ2_0, incremental prefill, own KV)
+Documentation=file:///home/ubuntu/cmp-voice/README.md
+After=network.target
+# Держит GPU0 почти целиком. Конфликтует с другими LLM на этой карте.
+Conflicts=llama-server.service llama-server-ornith9.service llama-server-ornith.service qwen08-dev.service
+Wants=network-online.target
+
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/cmp-voice
+EnvironmentFile=-/etc/cmp-voice.env
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=LD_LIBRARY_PATH=/home/ubuntu/cmp-voice/src/llama-prism/build/bin
+Environment=BONSAI_MODEL=/home/ubuntu/models/bonsai9/PQ2_0.gguf
+Environment=BONSAI_CTX=32768
+Environment=BONSAI_BATCH=256
+Environment=BONSAI_THREADS=4
+Environment=BONSAI_GPU_LAYERS=99
+Environment=BONSAI_PORT=18521
+Environment=BONSAI_HOST=127.0.0.1
+Environment=BONSAI_KV_Q8=1
+Environment=BONSAI_WARMUP=1
+ExecStart=/home/ubuntu/cmp-voice/daemon/bonsai_daemon
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+# Машина ~12 ГиБ: модель (mmap) + веса держат ~2.5 ГиБ RSS
+MemoryHigh=7G
+MemoryMax=9G
+StandardOutput=journal
+StandardError=journal
+
+
+[Install]
+WantedBy=multi-user.target

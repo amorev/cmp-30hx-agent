@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMP Voice Agent</title>
+<style>
+:root{
+  --bg:#0e1117; --panel:#161b24; --panel2:#1c2230; --line:#28303f;
+  --fg:#e6edf3; --dim:#8b95a7; --acc:#4c9aff; --ok:#3fb950; --warn:#d29922; --err:#f85149;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:10;flex-wrap:wrap}
+h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.02em}
+.pill{font:11px var(--mono);padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:#1d3a24;background:#0f2415}
+.pill.warn{color:var(--warn);border-color:#3a2f14;background:#241d0f}
+.pill.err{color:var(--err);border-color:#3a1c1c;background:#241010}
+main{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;padding:14px 18px 40px;align-items:start}
+@media(max-width:1100px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:0 0 10px;font-weight:600}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{font:13px inherit;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:7px 13px;cursor:pointer;transition:.15s}
+button:hover:not(:disabled){border-color:var(--acc);background:#202a3a}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:#153a63;border-color:#1f5fa8}
+button.primary:hover:not(:disabled){background:#1a4a7d}
+button.rec{background:#3d1414;border-color:#7a2626}
+button.rec:hover:not(:disabled){background:#4d1919}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 12px;background:transparent;font-size:12px}
+.seg button.on{background:#153a63;color:#cfe4ff}
+.seg button+button{border-left:1px solid var(--line)}
+.stream{min-height:70px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;white-space:pre-wrap;word-break:break-word}
+.stream.dim{color:var(--dim)}
+#answer{min-height:110px;font-size:15px}
+textarea{width:100%;min-height:64px;resize:vertical;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:14px var(--mono)}
+textarea:focus{outline:none;border-color:var(--acc)}
+.hint{font-size:11px;color:var(--dim);margin-top:6px}
+#kvlog{font:11.5px/1.55 var(--mono);max-height:340px;overflow:auto;background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:8px}
+#kvlog div{padding:2px 0;border-bottom:1px dashed #1a212c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#kvlog div:last-child{border:0}
+.kv-sum{display:flex;gap:12px;flex-wrap:wrap;font:11px var(--mono);color:var(--dim);margin-bottom:8px}
+.kv-sum b{color:var(--fg);font-weight:600}
+.kv-live{display:flex;gap:8px;align-items:center;font:11.5px var(--mono);
+  color:var(--dim);margin:0 0 6px;padding:6px 8px;background:#0b0f15;
+  border:1px solid var(--line);border-radius:7px}
+.kv-live .dot{width:8px;height:8px;border-radius:50%;background:#4a5568;flex:0 0 auto}
+.kv-live.on .dot{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse .9s infinite}
+.kv-live.on{color:var(--fg);border-color:#1d3a24}
+.kv-live.stale .dot{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.kv-live.stale{color:var(--warn);border-color:#3a2f14}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.kv-bar{height:4px;background:#0b0f15;border-radius:3px;overflow:hidden;margin-bottom:8px}
+.kv-bar i{display:block;height:100%;background:linear-gradient(90deg,#1f5fa8,#4c9aff);transition:width .25s}
+#events{font:11.5px/1.5 var(--mono);max-height:260px;overflow:auto;background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:8px}
+#events div{padding:2px 0;color:var(--dim)}
+#events div b{color:var(--fg)}
+.tool{color:var(--acc)!important}
+.err{color:var(--err)!important}
+.okc{color:var(--ok)!important}
+.warnc{color:var(--warn)!important}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chips button{font-size:12px;padding:5px 10px;color:var(--dim)}
+label.sw{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--dim);cursor:pointer;user-select:none}
+input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px}
+.stat{font:11px var(--mono);color:var(--dim)}
+.spacer{flex:1}
+#dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}
+#dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <h1>CMP Voice Agent</h1>
+  <span class="pill" id="status">проверка…</span>
+  <span class="pill" id="llmpill">LLM —</span>
+  <span class="spacer"></span>
+  <span class="stat" id="ttcinfo"></span>
+</header>
+
+<main>
+  <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+    <div class="card">
+      <div class="row">
+        <button id="btnTalk" class="primary">▶ Начать разговор</button>
+        <span class="row" style="gap:6px">
+          <span id="dot"></span><span class="stat" id="state">готов</span>
+        </span>
+        <span class="spacer"></span>
+        <div class="seg" id="segTTS">
+          <button data-eng="silero">TTS: silero</button>
+          <button data-eng="kokoro">kokoro</button>
+        </div>
+        <button id="btnReset" title="сбросить историю, база остаётся в KV">Сброс</button>
+      </div>
+      <div class="hint" id="micHint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Распознавание (partial / final)</h2>
+      <div class="stream dim" id="partial">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Ответ</h2>
+      <div class="stream" id="answer"></div>
+      <div class="stat" id="genmeta" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Текстовый ввод</h2>
+      <textarea id="txt" placeholder="Наберите фразу и нажмите Enter. Shift+Enter — перенос строки."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btnSend" class="primary">Отправить (Enter)</button>
+        <label class="sw"><input type="checkbox" id="wordMode"> Enter по словам (проверка prefill)</label>
+        <span class="spacer"></span>
+        <span class="stat" id="wordBuf"></span>
+      </div>
+      <div class="hint" id="modeHint">Enter отправляет всю фразу целиком: prefill + генерация.</div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="card">
+      <h2>KV-кэш (по партиалам)</h2>
+      <div class="kv-sum">
+        <span>в KV: <b id="kvTotal">—</b></span>
+        <span>база: <b id="kvBase">—</b></span>
+        <span>партиалов: <b id="kvCount">0</b></span>
+        <span>досчитано: <b id="kvNewSum">0</b></span>
+      </div>
+      <div class="kv-live" id="kvLive">
+        <span class="dot" id="kvDot"></span>
+        <span id="kvLiveText">префилл: ждёт речи</span>
+      </div>
+      <div class="kv-bar"><i id="kvBar" style="width:0%"></i></div>
+      <div id="kvlog"><div style="color:#4a5568">ждёт ввода…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Журнал</h2>
+      <div id="events"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const el = {
+  status: $("status"), llmpill: $("llmpill"), ttcinfo: $("ttcinfo"),
+  btnTalk: $("btnTalk"), dot: $("dot"), state: $("state"),
+  segTTS: $("segTTS"), btnReset: $("btnReset"), micHint: $("micHint"),
+  partial: $("partial"), answer: $("answer"), genmeta: $("genmeta"),
+  txt: $("txt"), btnSend: $("btnSend"), wordMode: $("wordMode"),
+  wordBuf: $("wordBuf"), modeHint: $("modeHint"), chips: $("chips"),
+  kvlog: $("kvlog"), kvTotal: $("kvTotal"), kvBase: $("kvBase"), kvCount: $("kvCount"),
+  kvLive: $("kvLive"), kvLiveText: $("kvLiveText"), kvBar: $("kvBar"), kvNewSum: $("kvNewSum"),
+  events: $("events"),
+};
+
+let ws = null, audioCtx = null, micStream = null, workletNode = null, srcNode = null;
+let playCtx = null, nextPlayTime = 0, sampleRate = 24000;
+let busy = false, partialCount = 0, kvRows = 0, currentTTS = "silero";
+let kvNewTotal = 0, kvCtx = 24576, speechStartedAt = 0, lastPartialAt = 0, liveTimer = null;
+let answerText = "";
+
+// ------------------------------------------------------------------ утилиты
+function logEvent(html, cls) {
+  const d = document.createElement("div");
+  d.innerHTML = "[" + new Date().toLocaleTimeString() + "] " +
+    (cls ? `<span class="${cls}">${html}</span>` : html);
+  el.events.appendChild(d);
+  el.events.scrollTop = el.events.scrollHeight;
+  while (el.events.children.length > 300) el.events.removeChild(el.events.firstChild);
+}
+
+function setStatus(text, cls) {
+  el.status.textContent = text;
+  el.status.className = "pill " + (cls || "");
+}
+
+function setState(text, on) {
+  el.state.textContent = text;
+  el.dot.className = on ? "on" : "";
+}
+
+// ------------------------------------------------------------------ health
+async function pollHealth() {
+  try {
+    const r = await fetch("/health", { cache: "no-store" });
+    const h = await r.json();
+    if (h.status === "ok") setStatus("ok", "ok");
+    else setStatus("degraded", "warn");
+
+    if (h.llm) {
+      el.llmpill.textContent = `LLM: KV ${h.llm.kv_tokens} / ctx ${h.llm.ctx} · ${h.llm.kv_type}`;
+      el.llmpill.className = "pill ok";
+      el.kvTotal.textContent = h.llm.kv_tokens;
+      el.kvBase.textContent = h.llm.base_tokens;
+      if (h.llm.ctx) kvCtx = h.llm.ctx;
+      paintBar(h.llm.kv_tokens);
+    } else {
+      el.llmpill.textContent = "LLM недоступен";
+      el.llmpill.className = "pill err";
+    }
+    const t = h.tts_info || {};
+    let s = `TTS ${h.tts}`;
+    if (t.provider) s += ` (${t.provider})`;
+    if (t.voice) s += ` · ${t.voice}`;
+    if (!h.tts_ok) s += " — недоступен";
+    el.ttcinfo.textContent = s;
+
+    const tok = h.tools_token || {};
+    if (!window.__tokLogged) {
+      window.__tokLogged = true;
+      logEvent(`токен поиска: <b>${tok.present ? "есть" : "НЕТ"}</b> ` +
+               `(источник ${tok.source || "—"})`, tok.present ? "okc" : "err");
+    }
+  } catch (e) {
+    setStatus("нет связи с сервисом", "err");
+    el.llmpill.textContent = "LLM —";
+    el.llmpill.className = "pill err";
+  }
+}
+
+// ------------------------------------------------------------------ config
+async function loadConfig() {
+  try {
+    const r = await fetch("/config");
+    const c = await r.json();
+    currentTTS = localStorage.getItem("tts") || c.tts_active || "qwen";
+    for (const b of el.segTTS.querySelectorAll("button")) {
+      const info = (c.tts_engines || []).find(x => x.name === b.dataset.eng);
+      b.disabled = !info || !info.available;
+      b.title = info && !info.available ? (info.reason || "недоступен") : "";
+      b.classList.toggle("on", b.dataset.eng === currentTTS);
+    }
+    if (c.tts_engines && !(c.tts_engines.find(x => x.name === currentTTS) || {}).available) {
+      currentTTS = c.tts_active;
+    }
+    el.modeHint.textContent = c.tools_enabled
+      ? "Enter отправляет всю фразу целиком: prefill + генерация. Инструменты включены."
+      : "Enter отправляет всю фразу целиком. Инструменты выключены (VOICE_TOOLS_ENABLED=0).";
+  } catch (e) { logEvent("не удалось прочитать /config", "err"); }
+}
+
+// ------------------------------------------------------------------ WebSocket
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => {
+    logEvent("WebSocket подключён", "okc");
+    setState("готов", false);
+    ws.send(JSON.stringify({ type: "stat" }));
+    ws.send(JSON.stringify({ type: "tts_engine", engine: currentTTS }));
+  };
+
+  ws.onclose = () => {
+    logEvent("WebSocket закрыт, переподключение через 1.5 с", "warnc");
+    setState("нет связи", false);
+    setTimeout(connect, 1500);
+  };
+
+  ws.onerror = () => logEvent("ошибка WebSocket", "err");
+
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== "string") { playChunk(ev.data); return; }
+    let m;
+    try { m = JSON.parse(ev.data); } catch { return; }
+    handle(m);
+  };
+}
+
+function send(o) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(o));
+}
+
+// ------------------------------------------------------------------ обработка
+function handle(m) {
+  switch (m.type) {
+    case "pong": break;
+    case "started":
+      setState("слушаю", true);
+      logEvent("ASR запущен — говорите", "okc");
+      break;
+    case "stopped":
+      setState("готов", false);
+      logEvent("ASR остановлен");
+      break;
+    case "partial":
+      partialCount++;
+      el.partial.textContent = m.text;
+      el.partial.classList.remove("dim");
+      markPrefillRunning(m.text);
+      lastPartialAt = Date.now();
+      break;
+    case "final":
+      el.partial.textContent = m.text;
+      logEvent(`финал (${m.source || "asr"}): «${m.text}»`);
+      el.kvLiveText.textContent = "фраза закончена, кэш готов к генерации";
+      break;
+    case "kv":
+      renderKV(m);
+      break;
+    case "turn_start":
+      busy = true;
+      answerText = "";
+      el.answer.textContent = "";
+      el.genmeta.textContent = "";
+      setState("думаю…", true);
+      el.kvLive.classList.remove("on", "stale");
+      el.kvLiveText.textContent = "кэш готов, идёт генерация";
+      lockControls(true);
+      logEvent(`ход (${m.source}): «${m.text}»`, "tool");
+      break;
+    case "gen_start":
+      if (m.round > 1) logEvent(`раунд инструментов ${m.round}`, "tool");
+      break;
+    case "gen_first_token":
+      logEvent(`первый токен: ${m.ms} мс`, "okc");
+      setState("говорю", true);
+      break;
+    case "ans_token":
+      answerText += m.text;
+      el.answer.textContent = answerText;
+      break;
+    case "gen_stats":
+      el.genmeta.textContent =
+        `токенов ${m.tokens} · ${m.tok_s} ток/с · первый токен ${m.first_token_ms} мс · ` +
+        `prefill ${m.prefill_ms} мс (кэш ${m.cached_tokens} + новых ${m.new_tokens} из ${m.prompt_tokens}) · KV ${m.kv_tokens}`;
+      break;
+    case "tool_call":
+      logEvent(`вызов инструмента <b>${m.name}</b> ${JSON.stringify(m.args)}`, "tool");
+      break;
+    case "tool_result":
+      logEvent(`${m.name} → ${escapeHtml((m.result || "").slice(0, 300))}`, "tool");
+      break;
+    case "tts_error":
+      logEvent(`TTS: ${m.error}`, "err");
+      break;
+    case "tts_engine_set":
+      currentTTS = m.engine;
+      localStorage.setItem("tts", currentTTS);
+      markTTSSeg();
+      logEvent(`TTS движок: ${m.engine}`, "okc");
+      break;
+    case "audio_meta":
+      sampleRate = m.sample_rate || 24000;
+      break;
+    case "ready":
+      busy = false;
+      setState("готов", false);
+      lockControls(false);
+      setPrefillIdle("ждёт речи");
+      break;
+    case "turn_end":
+      logEvent("ход завершён", "okc");
+      break;
+    case "stat":
+      el.kvTotal.textContent = m.kv_tokens;
+      el.kvBase.textContent = m.base_tokens;
+      break;
+    case "reset_done":
+      el.kvlog.innerHTML = '<div style="color:#4a5568">сброшено, база в KV</div>';
+      partialCount = 0;
+      kvRows = 0;
+      kvNewTotal = 0;
+      el.kvCount.textContent = "0";
+      el.kvNewSum.textContent = "0";
+      paintBar(0);
+      setPrefillIdle("ждёт речи");
+      el.answer.textContent = "";
+      el.partial.textContent = "—";
+      logEvent("история сброшена, база осталась в KV", "okc");
+      break;
+    case "error":
+      logEvent(`ошибка: ${m.error}`, "err");
+      break;
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderKV(m) {
+  kvRows++;
+  el.kvCount.textContent = kvRows;
+  el.kvTotal.textContent = m.kv_tokens;
+  kvNewTotal += (m.new_tokens || 0);
+  el.kvNewSum.textContent = kvNewTotal;
+  paintBar(m.kv_tokens);
+  markPrefillDone(m);
+  if (kvRows === 1) el.kvlog.innerHTML = "";
+  const d = document.createElement("div");
+  const src = m.source === "text" ? "TEXT" : "ASR";
+  const ratio = m.prompt_tokens ? Math.round(100 * m.cached_tokens / m.prompt_tokens) : 0;
+  const ms = (m.ms_f != null ? m.ms_f : (m.ms || 0));
+  d.innerHTML = `<span style="color:#6f7787">${src}</span> ` +
+    `cached <b style="color:#3fb950">${m.cached_tokens}</b> + new ` +
+    `<b style="color:#4c9aff">${m.new_tokens}</b> / ${m.prompt_tokens} ` +
+    `<span style="color:#6f7787">(${ratio}%)</span> · ${Math.round(ms)} мс`;
+  el.kvlog.appendChild(d);
+  el.kvlog.scrollTop = el.kvlog.scrollHeight;
+
+  if (m.new_tokens > 10) {
+    d.title = "много новых токенов — кэш отстал";
+    d.style.color = "#d29922";
+  }
+}
+
+function paintBar(kvTokens) {
+  if (!kvCtx) return;
+  const pct = Math.max(0, Math.min(100, 100 * (kvTokens || 0) / kvCtx));
+  el.kvBar.style.width = pct.toFixed(1) + "%";
+}
+
+// «префилл идёт» — по партиалу видно, что кэш догоняет речь
+function markPrefillRunning(text) {
+  el.kvLive.classList.add("on");
+  el.kvLive.classList.remove("stale");
+  el.kvLiveText.textContent =
+    "префилл идёт: партиал «" + (text || "").slice(-42) + "»";
+}
+
+function markPrefillDone(m) {
+  const ms = Math.round(m.ms_f != null ? m.ms_f : (m.ms || 0));
+  el.kvLive.classList.remove("on", "stale");
+  el.kvLiveText.textContent =
+    "посчитано: +" + (m.new_tokens || 0) + " новых, " +
+    (m.cached_tokens || 0) + " из кэша, " + ms + " мс";
+  // если prefill шёл долго — подсветить как «отстаёт»
+  if (ms > 150 || (m.new_tokens || 0) > 25) {
+    el.kvLive.classList.add("stale");
+    el.kvLiveText.textContent += " · кэш догоняет";
+  }
+}
+
+function setPrefillIdle(reason) {
+  el.kvLive.classList.remove("on", "stale");
+  el.kvLiveText.textContent = "префилл: " + (reason || "ждёт речи");
+}
+
+function lockControls(lock) {
+  for (const b of el.segTTS.querySelectorAll("button")) {
+    if (lock) b.disabled = true;
+    else b.disabled = b.dataset.__unavail === "1";
+  }
+  el.btnReset.disabled = lock;
+  el.btnSend.disabled = lock;
+  el.txt.disabled = lock;
+  el.btnTalk.disabled = lock;
+  if (lock) el.micHint.textContent = "во время хода переключатели заблокированы";
+}
+
+function markTTSSeg() {
+  for (const b of el.segTTS.querySelectorAll("button")) {
+    b.classList.toggle("on", b.dataset.eng === currentTTS);
+  }
+}
+
+// ------------------------------------------------------------------ аудио выход
+function ensurePlayCtx() {
+  if (!playCtx) {
+    playCtx = new (window.AudioContext || window.webkitAudioContext)();
+    nextPlayTime = playCtx.currentTime;
+  }
+  if (playCtx.state === "suspended") playCtx.resume();
+  return playCtx;
+}
+
+function playChunk(buf) {
+  const ctx = ensurePlayCtx();
+  const bytes = new Uint8Array(buf);
+  // буферизация ПО БАЙТАМ: чанк может разрезать 16-битный сэмпл
+  const n = bytes.byteLength >> 1;
+  if (!n) return;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const f32 = new Float32Array(n);
+  for (let i = 0; i < n; i++) f32[i] = view.getInt16(i * 2, true) / 32768;
+
+  const ab = ctx.createBuffer(1, n, sampleRate);
+  ab.copyToChannel(f32, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = ab;
+  src.connect(ctx.destination);
+  const t = Math.max(ctx.currentTime + 0.02, nextPlayTime);
+  src.start(t);
+  nextPlayTime = t + ab.duration;
+}
+
+// ------------------------------------------------------------------ микрофон
+const WORKLET = `
+class Cap extends AudioWorkletProcessor {
+  constructor() { super(); this.acc = 0; this.buf = []; this.n = 0; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    // ресемплинг к 16 кГц простым накоплением + линейной интерполяцией
+    const ratio = sampleRate / 16000;
+    for (let i = 0; i < ch.length; i++) {
+      this.acc += 1;
+      if (this.acc >= ratio) {
+        this.acc -= ratio;
+        const s = Math.max(-1, Math.min(1, ch[i]));
+        this.buf.push(s < 0 ? s * 0x8000 : s * 0x7fff);
+        this.n++;
+        if (this.n >= 1600) {  // 100 мс
+          const i16 = new Int16Array(this.buf);
+          this.port.postMessage(i16.buffer, [i16.buffer]);
+          this.buf = []; this.n = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("cap", Cap);
+`;
+
+async function startMic() {
+  if (!window.isSecureContext) {
+    el.micHint.innerHTML = "⚠ микрофон заблокирован: нужен <b>localhost</b> или HTTPS. " +
+      "Используйте SSH-туннель. Текстовый ввод работает без микрофона.";
+    logEvent("микрофон недоступен: не защищённый контекст", "warnc");
+    return false;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (e) {
+    el.micHint.textContent = "⚠ нет доступа к микрофону: " + e.message +
+      " (текстовый ввод работает)";
+    logEvent("нет доступа к микрофону", "err");
+    return false;
+  }
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const blob = new Blob([WORKLET], { type: "application/javascript" });
+  await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+
+  srcNode = audioCtx.createMediaStreamSource(micStream);
+  workletNode = new AudioWorkletNode(audioCtx, "cap");
+  workletNode.port.onmessage = (ev) => {
+    if (ws && ws.readyState === WebSocket.OPEN && !busy) ws.send(ev.data);
+  };
+  srcNode.connect(workletNode);
+  // worklet не должен звучать в колонки: подключаем к «нулевому» усилению
+  const mute = audioCtx.createGain();
+  mute.gain.value = 0;
+  workletNode.connect(mute).connect(audioCtx.destination);
+  return true;
+}
+
+async function stopMic() {
+  if (workletNode) { try { workletNode.disconnect(); } catch {} workletNode = null; }
+  if (srcNode) { try { srcNode.disconnect(); } catch {} srcNode = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx) { try { await audioCtx.close(); } catch {} audioCtx = null; }
+}
+
+// ------------------------------------------------------------------ UI
+el.btnTalk.onclick = async () => {
+  if (micStream) {
+    await stopMic();
+    send({ type: "stop" });
+    el.btnTalk.textContent = "▶ Начать разговор";
+    el.btnTalk.classList.remove("rec");
+    el.micHint.textContent = "";
+    return;
+  }
+  const ok = await startMic();
+  if (!ok) return;
+  send({ type: "start" });
+  el.btnTalk.textContent = "■ Остановить";
+  el.btnTalk.classList.add("rec");
+  el.micHint.textContent = "микрофон активен; пауза 1.2–2.4 с завершает фразу";
+};
+
+el.segTTS.onclick = (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || b.disabled) return;
+  if (busy) { logEvent("нельзя переключать TTS во время хода", "warnc"); return; }
+  send({ type: "tts_engine", engine: b.dataset.eng });
+};
+
+el.btnReset.onclick = () => send({ type: "reset" });
+
+function sendText() {
+  const text = el.txt.value.trim();
+  const wordMode = el.wordMode.checked;
+
+  if (wordMode) {
+    // каждый Enter добавляет фрагмент; пустой Enter запускает генерацию
+    send({ type: "text", text, word_mode: true });
+    el.txt.value = "";
+    el.wordBuf.textContent = text ? "фрагмент добавлен → prefill" : "запуск генерации…";
+    setTimeout(() => { el.wordBuf.textContent = ""; }, 2500);
+    return;
+  }
+
+  if (!text) return;
+  send({ type: "text", text, word_mode: false });
+  el.txt.value = "";
+}
+
+el.btnSend.onclick = sendText;
+
+el.txt.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey) {
+    ev.preventDefault();
+    sendText();
+  }
+  // Shift+Enter — обычный перенос строки, ничего не отправляем
+});
+
+el.wordMode.addEventListener("change", () => {
+  const on = el.wordMode.checked;
+  localStorage.setItem("wordmode", on ? "1" : "0");
+  el.btnSend.textContent = on ? "Добавить фрагмент (Enter)" : "Отправить (Enter)";
+  el.modeHint.textContent = on
+    ? "Режим партиалов: каждый Enter добавляет фрагмент и сразу уходит в prefill. " +
+      "Пустой Enter запускает генерацию."
+    : "Enter отправляет всю фразу целиком: prefill + генерация.";
+});
+
+// быстрые кнопки готовых запросов
+const PRESETS = [
+  "Привет, как дела?",
+  "Какой сейчас курс биткоина?",
+  "Который час?",
+  "Расскажи коротко, что такое нейросеть",
+];
+for (const p of PRESETS) {
+  const b = document.createElement("button");
+  b.textContent = p;
+  b.onclick = () => { el.txt.value = p; el.txt.focus(); };
+  el.chips.appendChild(b);
+}
+
+// восстановление настроек
+if (localStorage.getItem("wordmode") === "1") {
+  el.wordMode.checked = true;
+  el.btnSend.textContent = "Добавить фрагмент (Enter)";
+}
+if (!window.isSecureContext) {
+  el.micHint.innerHTML = "⚠ микрофон требует localhost или HTTPS — используйте SSH-туннель. " +
+    "Текстовый ввод работает всегда.";
+}
+
+// сторож: речь идёт, а префилл не отвечает дольше 1.5 с — подсветить
+setInterval(() => {
+  if (!lastPartialAt) return;
+  if (Date.now() - lastPartialAt > 1500 && el.kvLive.classList.contains("on")) {
+    el.kvLive.classList.add("stale");
+    el.kvLiveText.textContent = "префилл отстаёт от речи";
+  }
+}, 700);
+
+connect();
+loadConfig();
+pollHealth();
+setInterval(pollHealth, 4000);
+})();
+</script>
+</body>
+</html>

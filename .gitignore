@@ -1,0 +1,61 @@
+# --- секреты и локальные настройки -------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+!.env.example
+.wormsoft-token
+*.token
+*apikey*
+*api-key*
+secrets/
+run/
+*.pem
+*.key
+!scripts/*.sh
+
+# --- модели и веса (качаются отдельно, см. README) ---------------------------------
+models/
+*.gguf
+*.onnx
+*.pt
+*.bin
+*.safetensors
+!voice/static/*.bin
+
+# --- сборка и вендоры --------------------------------------------------------------
+src/
+build/
+*.o
+*.so
+*.so.*
+*.a
+.bin/
+daemon/bonsai_daemon
+
+# --- Python ------------------------------------------------------------------------
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- логи и артефакты --------------------------------------------------------------
+logs/
+*.log
+reports/
+*.zip
+*.tar.gz
+
+# --- OS / редакторы ----------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+.tmpcheck/

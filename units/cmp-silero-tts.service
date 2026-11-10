@@ -1,0 +1,28 @@
+[Unit]
+Description=CMP Voice — Silero TTS v5_6 ru (отдельный процесс, torch CPU-only)
+Documentation=file:///home/ubuntu/cmp-voice/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/cmp-voice
+EnvironmentFile=-/etc/cmp-voice.env
+# torch строго на CPU: CUDA не должна быть видна (конфликт с onnxruntime-gpu)
+Environment=CUDA_VISIBLE_DEVICES=
+Environment=SILERO_PORT=8023
+Environment=SILERO_VOICE=xenia
+Environment=SILERO_THREADS=3
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/cmp-voice/scripts/run_silero.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=240
+MemoryHigh=4G
+MemoryMax=6G
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
