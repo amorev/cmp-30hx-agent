@@ -445,6 +445,22 @@ def build_registry() -> TTSRegistry:
 # ---------------------------------------------------------------------------
 _SENT_RE = re.compile(r"[^.!?…]*[.!?…]+")
 _SOFT_RE = re.compile(r"[^,;:—–-]*[,;:—–-]+")
+# Число, разрезанное границей буфера, нельзя отдавать в синтез:
+# «3,» + «5 кг» прочитается как «три» и «пять килограммов».
+_DIGIT_TAIL_RE = re.compile(r"[\d.,]\s*$")
+_DIGIT_HEAD_RE = re.compile(r"\s*[\d.,]")
+
+
+def _splits_number(sent: str, rest: str) -> bool:
+    """Проверяет, что граница не проходит внутри числа."""
+    if not sent or not rest:
+        return False
+    if _DIGIT_TAIL_RE.search(sent) and _DIGIT_HEAD_RE.match(rest):
+        return True
+    # «1 000» — пробел внутри разрядов
+    if re.search(r"\d\s*$", sent) and re.match(r"\s*\d{3}(?!\d)", rest):
+        return True
+    return False
 
 
 def split_clauses(buf: str, final: bool = False) -> tuple[list[str], str]:
@@ -457,8 +473,12 @@ def split_clauses(buf: str, final: bool = False) -> tuple[list[str], str]:
         if not (m and m.group(0).strip()):
             break
         if final or len(m.group(0)) >= config.tts_min_clause_chars():
-            out.append(m.group(0).strip())
-            rest = rest[m.end():]
+            sent, tail = m.group(0).strip(), rest[m.end():]
+            # «Цена 1.» — точка может оказаться десятичным разделителем
+            if not final and _splits_number(sent, tail):
+                break
+            out.append(sent)
+            rest = tail
             continue
         break
 
@@ -466,16 +486,25 @@ def split_clauses(buf: str, final: bool = False) -> tuple[list[str], str]:
     if len(rest) >= config.tts_soft_break_chars():
         m = _SOFT_RE.match(rest)
         if m and m.group(0).strip():
-            out.append(m.group(0).strip())
-            rest = rest[m.end():]
+            sent, tail = m.group(0).strip(), rest[m.end():]
+            if not _splits_number(sent, tail):
+                out.append(sent)
+                rest = tail
 
     # принудительная нарезка на длинных кусках
     while len(rest) > config.tts_max_clause_chars():
         cut = rest.rfind(" ", 0, config.tts_max_clause_chars())
         if cut < config.tts_min_clause_chars():
             cut = config.tts_max_clause_chars()
-        out.append(rest[:cut].strip())
-        rest = rest[cut:]
+        sent, tail = rest[:cut].strip(), rest[cut:]
+        if _splits_number(sent, tail):
+            # сдвигаем границу до конца числа
+            nxt = re.search(r"\S+", tail)
+            if nxt:
+                sent = rest[:cut + nxt.end()].strip()
+                tail = rest[cut + nxt.end():]
+        out.append(sent)
+        rest = tail
 
     if final and rest.strip():
         out.append(rest.strip())

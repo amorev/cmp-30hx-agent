@@ -34,6 +34,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+try:                                  # запуск как пакета: uvicorn silero.app:app
+    from .normalize import normalize as normalize_text
+except ImportError:                   # запуск как скрипта: python silero/app.py
+    from normalize import normalize as normalize_text
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("silero-tts")
 
@@ -48,11 +53,36 @@ PORT = int(os.environ.get("SILERO_PORT", "8023"))
 MAX_CLAUSE = int(os.environ.get("SILERO_MAX_CLAUSE", "220"))
 MIN_CLAUSE = int(os.environ.get("SILERO_MIN_CLAUSE", "12"))
 
+# Нормализация текста: в токенсете модели нет цифр и латиницы, поэтому
+# без неё «в 2024 году» читается как «в году». Отключается SILERO_NORMALIZE=0.
+NORMALIZE = os.environ.get("SILERO_NORMALIZE", "1").strip().lower() not in (
+    "0", "false", "no", "off")
+NORMALIZE_LATIN = os.environ.get("SILERO_NORMALIZE_LATIN", "1").strip().lower() not in (
+    "0", "false", "no", "off")
+
 app = FastAPI(title="Silero TTS v5_6 ru")
 
 _state: dict = {"model": None, "voices": [], "ready": False, "error": None}
 _sem = asyncio.Semaphore(1)          # модель не потокобезопасна
 _lock = asyncio.Lock()
+
+
+def _prepare(text: str) -> str:
+    """Нормализация перед синтезом (только для Silero).
+
+    Делается до нарезки на клаузы: числа разворачиваются в слова, и длина
+    клаузы должна считаться уже по развёрнутому тексту, иначе клауза
+    окажется вдвое длиннее лимита.
+    """
+    if not NORMALIZE:
+        return text
+    try:
+        return normalize_text(text, latin=NORMALIZE_LATIN)
+    except Exception as e:  # noqa: BLE001
+        # нормализация не должна ронять синтез: отдаём текст как есть
+        log.warning("нормализация не удалась (%s: %s) — синтез без неё",
+                    e.__class__.__name__, e)
+        return text
 
 
 def _split(text: str) -> list[str]:
@@ -147,6 +177,8 @@ async def health():
         "voices": _state["voices"],
         "sample_rate": SAMPLE_RATE,
         "device": "cpu",
+        "normalize": NORMALIZE,
+        "normalize_latin": NORMALIZE_LATIN,
     }
 
 
@@ -175,7 +207,7 @@ async def speech(body: SpeechIn):
         return JSONResponse({"error": f"неизвестный голос: {body.voice}"}, status_code=400)
 
     fmt = (body.response_format or "pcm").lower()
-    clauses = _split(text)
+    clauses = _split(_prepare(text))
     loop = asyncio.get_running_loop()
 
     if fmt == "wav":
@@ -214,7 +246,7 @@ async def tts_raw(body: TTSIn):
         return JSONResponse({"error": f"неизвестный голос: {body.voice}"}, status_code=400)
     loop = asyncio.get_running_loop()
     out = []
-    for c in _split(text):
+    for c in _split(_prepare(text)):
         async with _sem:
             out.append(await loop.run_in_executor(None, _synth, c, voice))
     return Response(content=b"".join(out), media_type="application/octet-stream",

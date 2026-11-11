@@ -14,6 +14,9 @@ Environment=CUDA_VISIBLE_DEVICES=
 Environment=SILERO_PORT=8023
 Environment=SILERO_VOICE=xenia
 Environment=SILERO_THREADS=3
+# нормализация текста: в токенсете Silero нет цифр и латиницы
+Environment=SILERO_NORMALIZE=1
+Environment=SILERO_NORMALIZE_LATIN=1
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/ubuntu/cmp-voice/scripts/run_silero.sh
 Restart=always
